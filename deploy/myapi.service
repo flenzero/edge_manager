@@ -1,0 +1,13 @@
+[Unit]
+Description=My FastAPI Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/myapi
+ExecStart=/home/myapi/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
