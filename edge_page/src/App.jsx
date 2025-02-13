@@ -4,8 +4,12 @@ export default function App() {
   // 选择模式：风电(wind) or 电梯(elevator)
   const [mode, setMode] = useState("wind"); 
 
-  // 修改 IP
+  // 修改 IP 相关信息
   const [ip, setIp] = useState("");
+  const [subnetMask, setSubnetMask] = useState("255.255.255.0");
+  const [gateway, setGateway] = useState("");
+  const [dns1, setDns1] = useState("");
+  const [dns2, setDns2] = useState("");
 
   // 修改 MQTT
   const [mqttAddress, setMqttAddress] = useState("");
@@ -26,11 +30,25 @@ export default function App() {
 
   // 1. 修改 IP
   const changeIP = async () => {
+    // 如果 IP 有值，但子网掩码为空，或子网掩码有值但 IP 为空，就提示错误并退出
+    if ((ip && !subnetMask) || (!ip && subnetMask)) {
+      alert("IP 和子网掩码必须同时设置，或者同时留空。");
+      return;
+    }
+  
+    // 构造请求参数
+    const params = new URLSearchParams({
+      new_ip: ip,
+      subnet_mask: subnetMask,
+      gateway: gateway,
+      dns1: dns1,
+      dns2: dns2,
+    });
+  
     await fetch("/change-ip", {
       method: "POST",
-      body: new URLSearchParams({ new_ip: ip }),
+      body: params,
     });
-    // 根据需要，可在此加入成功/错误提示
   };
 
   // 2. 修改 MQTT
@@ -111,13 +129,11 @@ export default function App() {
 
       {/* 修改 IP */}
       <div style={{ marginBottom: "1rem" }}>
-        <input
-          type="text"
-          placeholder="新 IP 地址"
-          value={ip}
-          onChange={(e) => setIp(e.target.value)}
-          style={{ marginRight: "8px" }}
-        />
+        <input type="text" placeholder="新 IP 地址" value={ip} onChange={(e) => setIp(e.target.value)} style={{ marginRight: "8px" }} />
+        <input type="text" placeholder="子网掩码" value={subnetMask} onChange={(e) => setSubnetMask(e.target.value)} style={{ marginRight: "8px" }} />
+        <input type="text" placeholder="网关" value={gateway} onChange={(e) => setGateway(e.target.value)} style={{ marginRight: "8px" }} />
+        <input type="text" placeholder="DNS 1" value={dns1} onChange={(e) => setDns1(e.target.value)} style={{ marginRight: "8px" }} />
+        <input type="text" placeholder="DNS 2" value={dns2} onChange={(e) => setDns2(e.target.value)} style={{ marginRight: "8px" }} />
         <button onClick={changeIP}>修改 IP</button>
       </div>
 

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, Form
 import subprocess
 import os
+import distro
 
 app = FastAPI()
 
@@ -19,6 +20,12 @@ def run_script(mode: str):
             print(f"执行脚本 {script_path} 失败: {e}")
     else:
         print(f"脚本 {script_path} 不存在或无执行权限")
+        
+def mask_to_cidr(netmask: str) -> int:
+    """
+    将子网掩码(如 '255.255.255.0')转换为CIDR表示(如 24)。
+    """
+    return sum(bin(int(octet)).count("1") for octet in netmask.split("."))
 
 
 def update_config(path: str, updates: dict):
@@ -61,13 +68,95 @@ def get_config_path(mode: str) -> str:
 
 
 @app.post("/change-ip")
-def change_ip(new_ip: str = Form(...)):
-    """ 修改本机 IP 地址（需要 root 权限） """
-    try:
-        subprocess.run(["sudo", "ip", "addr", "add", new_ip, "dev", "eth0"], check=True)
-        return {"status": "success", "message": f"IP changed to {new_ip}"}
-    except subprocess.CalledProcessError as e:
-        return {"status": "error", "message": str(e)}
+def change_ip(
+    new_ip: str = Form(""),
+    subnet_mask: str = Form(""),
+    gateway: str = Form(""),
+    dns1: str = Form(""),
+    dns2: str = Form("")
+):
+    # 收集要修改的项目
+    ip_cidr = None
+    print(new_ip, subnet_mask, gateway, dns1, dns2)
+    if new_ip and subnet_mask:
+        cidr = mask_to_cidr(subnet_mask)
+        ip_cidr = f"{new_ip}/{cidr}"
+
+    dns_list = [dns for dns in (dns1, dns2) if dns]  # 过滤空字符串
+
+    # 如果所有字段都空，则直接跳过
+    if not (ip_cidr or gateway or dns_list):
+        return {
+            "status": "skipped",
+            "message": "No valid parameters to update. Skipped all changes."
+        }
+
+    dist_id = distro.id().lower()
+    # ---- Ubuntu / Debian: 使用 netplan ----
+    if dist_id in ["ubuntu", "debian"]:
+        try:
+            # 构建 netplan 配置文件内容
+            netplan_conf = [
+                "network:",
+                "  version: 2",
+                "  renderer: networkd",
+                "  ethernets:",
+                "    enp1s0:"
+            ]
+
+            # 只有在 new_ip+subnet_mask 都有时才写 addresses
+            if ip_cidr:
+                netplan_conf.append(f"      addresses:")
+                netplan_conf.append(f"        - {ip_cidr}")
+
+            # 如果有 gateway
+            if gateway:
+                netplan_conf.append(f"      gateway4: {gateway}")
+
+            # 如果有 dns
+            if dns_list:
+                dns_str = ", ".join(dns_list)
+                netplan_conf.append("      nameservers:")
+                netplan_conf.append(f"        addresses: [{dns_str}]")
+
+            # 拼成完整 YAML
+            final_yaml = "\n".join(netplan_conf) + "\n"
+
+            # 写入自定义文件
+            with open("/etc/netplan/01-custom.yaml", "w") as f:
+                f.write(final_yaml)
+
+            # 应用 netplan
+            subprocess.run(["sudo", "netplan", "apply"], check=True)
+
+            return {
+                "status": "success",
+                "message": f"Ubuntu/Debian netplan updated: IP={ip_cidr}, GW={gateway}, DNS={dns_list}"
+            }
+        except subprocess.CalledProcessError as e:
+            return {"status": "error", "message": str(e)}
+
+    # ---- CentOS / RHEL / Fedora: 使用 nmcli ----
+    else:
+        # 构建 nmcli 命令行参数
+        nmcli_cmds = []
+        if ip_cidr:
+            nmcli_cmds += ["ipv4.addresses", ip_cidr, "ipv4.method", "manual"]
+        if gateway:
+            nmcli_cmds += ["ipv4.gateway", gateway]
+        if dns_list:
+            nmcli_cmds += ["ipv4.dns", ",".join(dns_list)]
+
+        try:
+            subprocess.run(["sudo", "nmcli", "con", "mod", "enp1s0"] + nmcli_cmds, check=True)
+            subprocess.run(["sudo", "nmcli", "con", "up", "enp1s0"], check=True)
+
+            return {
+                "status": "success",
+                "message": f"CentOS/RHEL/Fedora nmcli updated: IP={ip_cidr}, GW={gateway}, DNS={dns_list}"
+            }
+        except subprocess.CalledProcessError as e:
+            return {"status": "error", "message": str(e)}
 
 @app.post("/upload-file")
 def upload_file(file: UploadFile = File(...), target_path: str = Form(...)):
