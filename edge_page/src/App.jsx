@@ -2,7 +2,7 @@ import { useState } from "react";
 
 export default function App() {
   // 选择模式：风电(wind) or 电梯(elevator)
-  const [mode, setMode] = useState("wind"); 
+  const [mode, setMode] = useState("elevator"); 
 
   // 修改 IP 相关信息
   const [ip, setIp] = useState("");
@@ -122,8 +122,8 @@ export default function App() {
       <div style={{ marginBottom: "1rem" }}>
         <label style={{ marginRight: "8px" }}>选择模式：</label>
         <select value={mode} onChange={(e) => setMode(e.target.value)}>
-          <option value="wind">风电</option>
-          <option value="elevator">电梯</option>
+          <option value="wind">win（风电）</option>
+          <option value="elevator">ele（电梯，戴德）</option>
         </select>
       </div>
 
@@ -192,10 +192,10 @@ export default function App() {
           onChange={(e) => setUploadInterval(parseInt(e.target.value, 10))}
           style={{ marginRight: "8px" }}
         />
-        <button onClick={changeInterval}>修改上传周期</button>
+        <button onClick={changeInterval}>修改上传周期（秒）</button>
       </div>
 
-      {/* 上传模型 */}
+      {/* 上传模型
       <div style={{ marginBottom: "1rem" }}>
         <input
           type="file"
@@ -203,7 +203,7 @@ export default function App() {
           style={{ marginRight: "8px" }}
         />
         <button onClick={uploadModel}>上传模型</button>
-      </div>
+      </div> */}
     </div>
   );
 }
